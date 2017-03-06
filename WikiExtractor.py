@@ -67,6 +67,7 @@ import os.path
 import re  # TODO use regex when it will be standard
 import time
 import json
+from collections import defaultdict
 from io import StringIO
 from multiprocessing import Queue, Process, Value, cpu_count
 from timeit import default_timer
@@ -2503,8 +2504,9 @@ section = re.compile(r'(==+)\s*(.*?)\s*\1')
 
 listOpen = {'*': '<ul>', '#': '<ol>', ';': '<dl>', ':': '<dl>'}
 listClose = {'*': '</ul>', '#': '</ol>', ';': '</dl>', ':': '</dl>'}
-listItem = {'*': '<li>%s</li>', '#': '<li>%s</<li>', ';': '<dt>%s</dt>',
-            ':': '<dd>%s</dd>'}
+# default to li for any list items
+listItem = defaultdict(lambda: '<li>%s</li>', {'*': '<li>%s</li>', '#': '<li>%s</<li>', ';': '<dt>%s</dt>',
+            ':': '<dd>%s</dd>'})
 
 
 def compact(text):
@@ -2591,17 +2593,21 @@ def compact(text):
             line = line[i:].strip()
             if line:  # FIXME: n is '"'
                 if options.keepLists:
-                    # emit open sections
-                    items = sorted(headers.items())
-                    for _, v in items:
-                        page.append(v)
-                    headers.clear()
-                    # use item count for #-lines
-                    listCount[i - 1] += 1
-                    bullet = '%d. ' % listCount[i - 1] if n == '#' else '- '
-                    page.append('{0:{1}s}'.format(bullet, len(listLevel)) + line)
-                elif options.toHTML:
-                    page.append(listItem[n] % line)
+                    if options.toHTML:
+                        try:
+                            page.append(listItem[n] % line)
+                        except:
+                            logging.warn('the line has no starting marker:{}'.format(line))
+                    else:
+                        # emit open sections
+                        items = sorted(headers.items())
+                        for _, v in items:
+                            page.append(v)
+                        headers.clear()
+                        # use item count for #-lines
+                        listCount[i - 1] += 1
+                        bullet = '%d. ' % listCount[i - 1] if n == '#' else '- '
+                        page.append('{0:{1}s}'.format(bullet, len(listLevel)) + line)
         elif len(listLevel):
             if options.toHTML:
                 for c in reversed(listLevel):
