@@ -2505,8 +2505,8 @@ section = re.compile(r'(==+)\s*(.*?)\s*\1')
 listOpen = {'*': '<ul>', '#': '<ol>', ';': '<dl>', ':': '<dl>'}
 listClose = {'*': '</ul>', '#': '</ol>', ';': '</dl>', ':': '</dl>'}
 # default to li for any list items
-listItem = defaultdict(lambda: '<li>%s</li>', {'*': '<li>%s</li>', '#': '<li>%s</<li>', ';': '<dt>%s</dt>',
-            ':': '<dd>%s</dd>'})
+listItem =  {'*': '<li>%s</li>', '#': '<li>%s</<li>', ';': '<dt>%s</dt>',
+            ':': '<dd>%s</dd>'}
 
 
 def compact(text):
@@ -2597,7 +2597,7 @@ def compact(text):
                         try:
                             page.append(listItem[n] % line)
                         except:
-                            logging.warn('the line has no starting marker:{}'.format(line))
+                            logging.warn('the line has no starting marker({}): {}'.format(n, line))
                     else:
                         # emit open sections
                         items = sorted(headers.items())
