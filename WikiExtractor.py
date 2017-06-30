@@ -2529,6 +2529,7 @@ def compact(text):
                         page.append(listClose[c])
                 listLevel = []
                 listCount = []
+                emptySection = False
             elif page and page[-1]:
                 page.append('')
             continue
@@ -2599,11 +2600,12 @@ def compact(text):
                         except:
                             logging.warn('the line has no starting marker({}): {}'.format(n, line))
                     else:
-                        # emit open sections
-                        items = sorted(headers.items())
-                        for _, v in items:
-                            page.append(v)
-                        headers.clear()
+                        if options.keepSections:
+                            # emit open sections
+                            items = sorted(headers.items())
+                            for _, v in items:
+                                page.append(v)
+                            headers.clear()
                         # use item count for #-lines
                         listCount[i - 1] += 1
                         bullet = '%d. ' % listCount[i - 1] if n == '#' else '- '
