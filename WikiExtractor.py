@@ -168,6 +168,9 @@ options = SimpleNamespace(
     # Whether to expand templates
     expand_templates = True,
 
+    # Whether only parse out templates and no extraction
+    templates_only = False,
+
     ##
     ## Whether to escape doc content
     escape_doc = False,
@@ -191,12 +194,15 @@ options = SimpleNamespace(
     
     ignored_tag_patterns = [],
     
+    # The original authors have "small" in this discard list
+    # We keep small because sometimes they are used for tenure in band membership lists
+    # e.g., maroon 5
     discardElements = [
         'gallery', 'timeline', 'noinclude', 'pre',
         'table', 'tr', 'td', 'th', 'caption', 'div',
         'form', 'input', 'select', 'option', 'textarea',
         'ul', 'li', 'ol', 'dl', 'dt', 'dd', 'menu', 'dir',
-        'ref', 'references', 'img', 'imagemap', 'source', 'small',
+        'ref', 'references', 'img', 'imagemap', 'source',
         'sub', 'sup', 'indicator'
     ],
 )
@@ -2010,11 +2016,32 @@ def define_template(title, page):
 # ----------------------------------------------------------------------
 
 def dropNested(text, openDelim, closeDelim):
+    """Hack: Chunk the text into ref segments "<ref ...>...</ref>" and dropNested braces
+    within a segment.
+    This is to prevent unbalanced braces (e.g., "{{xyz | abc={{ | opq}}") from messing up
+    the nesting detection.
+    """
+    tagRE = re.compile('(&lt;ref.*?&gt;)(.+?)&lt;/ref&gt;', re.IGNORECASE)
+    openRE = re.compile(openDelim, re.IGNORECASE)
+    closeRE = re.compile(closeDelim, re.IGNORECASE)
+
+    start = 0
+    segments = []
+    m = tagRE.search(text, start)
+    while m:
+        segments.append(dropNested1(text[start:m.start()], openRE, closeRE))
+        segments.append('{}{}&lt;/ref&gt;'.format(
+            m.group(1), dropNested1(m.group(2), openRE, closeRE)))
+        start = m.end()
+        m = tagRE.search(text, start)
+    segments.append(dropNested1(text[start:], openRE, closeRE))
+    return ''.join(segments)
+
+
+def dropNested1(text, openRE, closeRE):
     """
     A matching function for nested expressions, e.g. namespaces and tables.
     """
-    openRE = re.compile(openDelim, re.IGNORECASE)
-    closeRE = re.compile(closeDelim, re.IGNORECASE)
     # partition text in separate blocks { } { }
     spans = []                  # pairs (s, e) for each partition
     nest = 0                    # nesting level
@@ -2890,7 +2917,7 @@ def process_dump(input_file, template_file, out_file, file_size, file_compress,
                 load_templates(file)
                 file.close()
             else:
-                if input_file == '-':
+                if not options.templates_only and input_file == '-':
                     # can't scan then reset stdin; must error w/ suggestion to specify template_file
                     raise ValueError("to use templates with stdin dump, must supply explicit template-file")
                 logging.info("Preprocessing '%s' to collect template definitions: this may take some time.", input_file)
@@ -2899,6 +2926,9 @@ def process_dump(input_file, template_file, out_file, file_size, file_compress,
                 input = fileinput.FileInput(input_file, openhook=fileinput.hook_compressed)
         template_load_elapsed = default_timer() - template_load_start
         logging.info("Loaded %d templates in %.1fs", len(options.templates), template_load_elapsed)
+    if options.templates_only:
+        logging.info('Templates generation only. Exiting ...')
+        return
 
     # process pages
     logging.info("Starting page extraction from %s.", input_file)
@@ -3117,6 +3147,8 @@ def main():
                         help="accepted namespaces in links")
     groupP.add_argument("--templates",
                         help="use or create file containing templates")
+    groupP.add_argument("--templates_only", action="store_true",
+                        help="only generates or loads templates file, no extraction.")
     groupP.add_argument("--no-templates", action="store_false",
                         help="Do not expand templates")
     groupP.add_argument("-r", "--revision", action="store_true", default=options.print_revision,
@@ -3159,6 +3191,7 @@ def main():
         options.keepLinks = True
 
     options.expand_templates = args.no_templates
+    options.templates_only = args.templates_only
     options.filter_disambig_pages = args.filter_disambig_pages
     options.keep_tables = args.keep_tables
 
